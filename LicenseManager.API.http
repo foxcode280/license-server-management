@@ -1,0 +1,17 @@
+@LicenseManager.API_HostAddress = http://localhost:5194
+
+### Generate a signed license document for subscription 1
+POST {{LicenseManager.API_HostAddress}}/api/license/generate?subscriptionId=1
+Accept: application/json
+
+### Download the generated license as a .lic file for subscription 1
+GET {{LicenseManager.API_HostAddress}}/api/license/download?subscriptionId=1
+Accept: application/octet-stream
+
+### Verify a license document directly
+POST {{LicenseManager.API_HostAddress}}/api/license/verify-license
+Content-Type: application/json
+
+{
+  "licenseDocument": "{\n  \"keyId\": \"v1\",\n  \"payload\": \"{\\\"licenseId\\\":\\\"replace-me\\\",\\\"keyId\\\":\\\"v1\\\",\\\"companyId\\\":1,\\\"companyName\\\":\\\"replace-me\\\",\\\"subscriptionId\\\":1,\\\"planName\\\":\\\"replace-me\\\",\\\"licenseDurationType\\\":\\\"replace-me\\\",\\\"startDate\\\":\\\"2026-01-01T00:00:00Z\\\",\\\"expiryDate\\\":\\\"2026-12-31T00:00:00Z\\\",\\\"licenseMode\\\":\\\"replace-me\\\",\\\"licenseAllocations\\\":[],\\\"features\\\":[]}\",\n  \"signature\": \"replace-me\"\n}"
+}
