@@ -1,4 +1,5 @@
 using LicenseManager.API.DTOs.Licenses;
+using LicenseManager.API.Helpers;
 using LicenseManager.API.Repositories.Interfaces;
 using LicenseManager.API.Services.Interfaces;
 
@@ -7,53 +8,79 @@ namespace LicenseManager.API.Services
     public class LicenseService : ILicenseService
     {
         private readonly ILicenseRepository _repository;
-        private readonly IConfiguration _configuration;
+        private readonly LicenseProtectionService _licenseProtectionService;
 
-        public LicenseService(ILicenseRepository repository, IConfiguration configuration)
+        public LicenseService(
+            ILicenseRepository repository,
+            LicenseProtectionService licenseProtectionService)
         {
             _repository = repository;
-            _configuration = configuration;
+            _licenseProtectionService = licenseProtectionService;
         }
 
-        public async Task<string> GenerateLicense(GenerateLicenseRequestDto request)
+        public async Task<string> GenerateLicense(long subscriptionId, long userId)
         {
-            if (request.SubscriptionId <= 0)
+            if (userId <= 0)
             {
-                throw new Exception("Invalid subscription");
+                throw new InvalidOperationException("Logged in user id is required.");
             }
 
-            return await _repository.GenerateLicense(
-                request.SubscriptionId,
-                request.CreatedBy
-            );
-        }
+            var context = await _repository.GetLicenseGenerationContext(subscriptionId);
 
-        public async Task<string> GenerateLicense(long subscriptionId)
-        {
+            if (!string.Equals(context.SubscriptionStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "License can only be generated or downloaded while the subscription is in PENDING status.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(context.ExistingLicenseKey))
+            {
+                return context.ExistingLicenseKey;
+            }
+
             var payload = await _repository.GetLicensePayload(subscriptionId);
-            var privateKey = _configuration["LicenseSigning:PrivateKey"]
-                ?? throw new InvalidOperationException("License signing private key is not configured.");
-            var keyId = _configuration["LicenseSigning:KeyId"] ?? "v1";
-
             payload.LicenseId = Guid.NewGuid().ToString();
-            payload.KeyId = keyId;
 
-            var licenseText = LicenseGenerator.GenerateLicense(payload, keyId, privateKey);
+            var encryptedLicense = _licenseProtectionService.CreateEncryptedLicenseDocument(payload);
 
             await _repository.SaveLicense(
                 subscriptionId,
-                payload.LicenseId,
-                licenseText
+                encryptedLicense,
+                payload.LicenseDurationType,
+                payload.LicenseMode
             );
 
-            return licenseText;
+            return encryptedLicense;
         }
 
-        public async Task<ActivationResponseDto> ActivateLicense(ActivationRequestDto request)
+        public async Task<ActivationResponseDto> ActivateLicense(ActivationRequestDto request, long userId)
         {
+            if (userId <= 0)
+            {
+                return new ActivationResponseDto
+                {
+                    StatusCode = "UNAUTHORIZED",
+                    StatusMessage = "Logged in user id is required."
+                };
+            }
+
             if (string.IsNullOrWhiteSpace(request.LicenseKey))
             {
-                throw new Exception("License key required");
+                return new ActivationResponseDto
+                {
+                    StatusCode = "INVALID_LICENSE",
+                    StatusMessage = "License key is required."
+                };
+            }
+
+            var validation = _licenseProtectionService.ValidateEncryptedLicense(request.LicenseKey);
+            if (!validation.IsValid)
+            {
+                return new ActivationResponseDto
+                {
+                    StatusCode = "INVALID_LICENSE",
+                    StatusMessage = validation.Error ?? "License validation failed."
+                };
             }
 
             return await _repository.ActivateLicense(

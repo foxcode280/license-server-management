@@ -1,140 +1,210 @@
 using LicenseManager.API.DTOs.Licenses;
+using LicenseManager.API.Helpers;
 using LicenseManager.API.Models;
 using LicenseManager.API.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Cryptography;
+using System.Security.Claims;
 using System.Text;
 
 namespace LicenseManager.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/license")]
     public class LicenseController : ControllerBase
     {
         private readonly ILicenseService _licenseService;
-        private readonly IConfiguration _configuration;
+        private readonly LicenseProtectionService _licenseProtectionService;
 
         public LicenseController(
             ILicenseService licenseService,
-            IConfiguration configuration)
+            LicenseProtectionService licenseProtectionService)
         {
             _licenseService = licenseService;
-            _configuration = configuration;
-        }
-
-        [HttpPost("generate1")]
-        public async Task<IActionResult> GenerateLicense1([FromBody] GenerateLicenseRequestDto request)
-        {
-            var licenseKey = await _licenseService.GenerateLicense(request);
-
-            return Ok(new
-            {
-                LicenseKey = licenseKey
-            });
+            _licenseProtectionService = licenseProtectionService;
         }
 
         [HttpPost("activate")]
         public async Task<IActionResult> ActivateLicense([FromBody] ActivationRequestDto request)
         {
-            var result = await _licenseService.ActivateLicense(request);
+            try
+            {
+                var userId = GetLoggedInUserId();
+                var result = await _licenseService.ActivateLicense(request, userId);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
+        }
 
-            return Ok(result);
+        [HttpPost("activate-file")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ActivateLicenseFile([FromForm] ActivationFileRequestDto request)
+        {
+            try
+            {
+                using var reader = new StreamReader(request.LicenseFile.OpenReadStream(), Encoding.UTF8);
+                var licenseContent = await reader.ReadToEndAsync();
+
+                var activationRequest = new ActivationRequestDto
+                {
+                    LicenseKey = licenseContent,
+                    MachineId = request.MachineId,
+                    Hostname = request.Hostname,
+                    IpAddress = request.IpAddress
+                };
+
+                var userId = GetLoggedInUserId();
+                var result = await _licenseService.ActivateLicense(activationRequest, userId);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
         [HttpPost("verify-license")]
-        public IActionResult VerifyLicense([FromBody] VerifyRequest request)
+        public ActionResult<VerifyLicenseResponseDto> VerifyLicense([FromBody] VerifyRequest request)
         {
-            if (!string.IsNullOrWhiteSpace(request.LicenseDocument))
-            {
-                if (!LicenseGenerator.TryParseLicenseDocument(request.LicenseDocument, out var document) || document is null)
-                {
-                    return Ok(new { isValid = false, reason = "Invalid license document format" });
-                }
-
-                var publicKey = ResolvePublicKey(document.KeyId, request.PublicKey);
-                var result = VerifyLicenseSignature(document.Payload, document.Signature, publicKey);
-
-                return Ok(new { isValid = result, keyId = document.KeyId });
-            }
-
-            if (!request.HasLegacyFields())
-            {
-                return BadRequest("Provide either LicenseDocument or both LicenseJson and Signature.");
-            }
-
-            var resolvedPublicKey = ResolvePublicKey(request.KeyId, request.PublicKey);
-            var isValid = VerifyLicenseSignature(request.LicenseJson!, request.Signature!, resolvedPublicKey);
-
-            return Ok(new { isValid, keyId = request.KeyId ?? (_configuration["LicenseSigning:KeyId"] ?? "v1") });
-        }
-
-        public static bool VerifyLicenseSignature(string licenseJson, string signature, string? publicKey)
-        {
-            if (string.IsNullOrWhiteSpace(publicKey))
-            {
-                return false;
-            }
-
             try
             {
-                using var rsa = RSA.Create();
-                rsa.ImportRSAPublicKey(Convert.FromBase64String(publicKey), out _);
+                var result = _licenseProtectionService.ValidateEncryptedLicense(
+                    request.LicenseDocument,
+                    request.PublicKey);
 
-                var data = Encoding.UTF8.GetBytes(licenseJson);
-                var sig = Convert.FromBase64String(signature);
+                return Ok(MapVerifyResult(result));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new VerifyLicenseResponseDto
+                {
+                    IsValid = false,
+                    Reason = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new VerifyLicenseResponseDto
+                {
+                    IsValid = false,
+                    Reason = ex.Message
+                });
+            }
+        }
 
-                return rsa.VerifyData(
-                    data,
-                    sig,
-                    HashAlgorithmName.SHA256,
-                    RSASignaturePadding.Pkcs1);
-            }
-            catch (FormatException)
+        [HttpPost("verify-file")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<VerifyLicenseResponseDto>> VerifyLicenseFile([FromForm] VerifyLicenseFileRequestDto request)
+        {
+            try
             {
-                return false;
+                using var reader = new StreamReader(request.LicenseFile.OpenReadStream(), Encoding.UTF8);
+                var licenseContent = await reader.ReadToEndAsync();
+
+                var result = _licenseProtectionService.ValidateEncryptedLicense(
+                    licenseContent,
+                    request.PublicKey);
+
+                return Ok(MapVerifyResult(result));
             }
-            catch (CryptographicException)
+            catch (InvalidOperationException ex)
             {
-                return false;
+                return BadRequest(new VerifyLicenseResponseDto
+                {
+                    IsValid = false,
+                    Reason = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new VerifyLicenseResponseDto
+                {
+                    IsValid = false,
+                    Reason = ex.Message
+                });
             }
         }
 
         [HttpPost("generate")]
         public async Task<IActionResult> GenerateLicense([FromQuery] long subscriptionId)
         {
-            var license = await _licenseService.GenerateLicense(subscriptionId);
-
-            return Ok(new
+            try
             {
-                subscriptionId,
-                license
-            });
+                var userId = GetLoggedInUserId();
+                var license = await _licenseService.GenerateLicense(subscriptionId, userId);
+
+                return Ok(new
+                {
+                    subscriptionId,
+                    license,
+                    message = "License generated successfully."
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
         [HttpGet("download")]
         public async Task<IActionResult> DownloadLicense([FromQuery] long subscriptionId)
         {
-            var license = await _licenseService.GenerateLicense(subscriptionId);
-            var fileName = $"subscription-{subscriptionId}.lic";
-            var bytes = Encoding.UTF8.GetBytes(license);
+            try
+            {
+                var userId = GetLoggedInUserId();
+                var license = await _licenseService.GenerateLicense(subscriptionId, userId);
+                var fileName = $"subscription-{subscriptionId}.lic";
+                var bytes = Encoding.UTF8.GetBytes(license);
 
-            return File(bytes, "application/octet-stream", fileName);
+                return File(bytes, "application/octet-stream", fileName);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
-        private string? ResolvePublicKey(string? keyId, string? requestPublicKey)
+        private long GetLoggedInUserId()
         {
-            if (!string.IsNullOrWhiteSpace(requestPublicKey))
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!long.TryParse(userId, out var parsedUserId))
             {
-                return requestPublicKey;
+                throw new InvalidOperationException("Logged in user id is missing from the JWT token.");
             }
 
-            var activeKeyId = _configuration["LicenseSigning:KeyId"] ?? "v1";
-            if (string.IsNullOrWhiteSpace(keyId) || string.Equals(keyId, activeKeyId, StringComparison.Ordinal))
-            {
-                return _configuration["LicenseSigning:PublicKey"];
-            }
+            return parsedUserId;
+        }
 
-            return _configuration[$"LicenseSigning:PublicKeys:{keyId}"];
+        private static VerifyLicenseResponseDto MapVerifyResult(LicenseValidationResult result)
+        {
+            return new VerifyLicenseResponseDto
+            {
+                IsValid = result.IsValid,
+                Reason = result.Error,
+                KeyId = result.KeyId,
+                Payload = result.Payload
+            };
         }
     }
 }

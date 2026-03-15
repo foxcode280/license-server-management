@@ -1,17 +1,78 @@
-@LicenseManager.API_HostAddress = http://localhost:5194
+@LicenseManager.API_HostAddress = https://localhost:7223
+@accessToken = PASTE_ACCESS_TOKEN_HERE
+@refreshToken = PASTE_REFRESH_TOKEN_HERE
 
-### Generate a signed license document for subscription 1
-POST {{LicenseManager.API_HostAddress}}/api/license/generate?subscriptionId=1
+### 1. Login and copy accessToken/refreshToken from the response
+POST {{LicenseManager.API_HostAddress}}/api/auth/login
+Content-Type: application/json
 Accept: application/json
 
-### Download the generated license as a .lic file for subscription 1
+{
+  "email": "support@metronux.com",
+  "password": "admin@123"
+}
+
+### 2. Generate encrypted license for a pending subscription
+POST {{LicenseManager.API_HostAddress}}/api/license/generate?subscriptionId=1
+Accept: application/json
+Authorization: Bearer {{accessToken}}
+
+### 3. Download encrypted .lic file for a pending subscription
 GET {{LicenseManager.API_HostAddress}}/api/license/download?subscriptionId=1
 Accept: application/octet-stream
+Authorization: Bearer {{accessToken}}
 
-### Verify a license document directly
+### 4. Verify encrypted license text by paste
 POST {{LicenseManager.API_HostAddress}}/api/license/verify-license
 Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{accessToken}}
 
 {
-  "licenseDocument": "{\n  \"keyId\": \"v1\",\n  \"payload\": \"{\\\"licenseId\\\":\\\"replace-me\\\",\\\"keyId\\\":\\\"v1\\\",\\\"companyId\\\":1,\\\"companyName\\\":\\\"replace-me\\\",\\\"subscriptionId\\\":1,\\\"planName\\\":\\\"replace-me\\\",\\\"licenseDurationType\\\":\\\"replace-me\\\",\\\"startDate\\\":\\\"2026-01-01T00:00:00Z\\\",\\\"expiryDate\\\":\\\"2026-12-31T00:00:00Z\\\",\\\"licenseMode\\\":\\\"replace-me\\\",\\\"licenseAllocations\\\":[],\\\"features\\\":[]}\",\n  \"signature\": \"replace-me\"\n}"
+  "licenseDocument": "PASTE_THE_ENCRYPTED_LIC_CONTENT_HERE"
+}
+
+### 5. Verify encrypted .lic file by upload
+POST {{LicenseManager.API_HostAddress}}/api/license/verify-file
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="licenseFile"; filename="subscription-1.lic"
+Content-Type: application/octet-stream
+
+PASTE_FILE_CONTENT_HERE
+--boundary--
+
+### 6. Activate encrypted license by paste
+POST {{LicenseManager.API_HostAddress}}/api/license/activate
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "licenseKey": "PASTE_THE_ENCRYPTED_LIC_CONTENT_HERE",
+  "machineId": "MACHINE-001",
+  "hostname": "EMS-SERVER",
+  "ipAddress": "192.168.1.10"
+}
+
+### 7. Refresh token using current access token and refresh token
+POST {{LicenseManager.API_HostAddress}}/api/auth/refresh
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### 8. Logout using current access token and refresh token
+POST {{LicenseManager.API_HostAddress}}/api/auth/logout
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "refreshToken": "{{refreshToken}}"
 }

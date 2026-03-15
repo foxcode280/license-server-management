@@ -15,25 +15,6 @@ namespace LicenseManager.API.Repositories
             _factory = factory;
         }
 
-        public async Task<string> GenerateLicense(long subscriptionId, long createdBy)
-        {
-            using var conn = _factory.CreateConnection();
-
-            await conn.OpenAsync();
-
-            using var cmd = new NpgsqlCommand(
-                "SELECT sp_generate_license(@p_subscription_id,@p_created_by)",
-                conn);
-
-            cmd.Parameters.AddWithValue("@p_subscription_id", subscriptionId);
-            cmd.Parameters.AddWithValue("@p_created_by", createdBy);
-
-            var result = await cmd.ExecuteScalarAsync();
-
-            return result?.ToString()
-                ?? throw new InvalidOperationException("License generation did not return a license key.");
-        }
-
         public async Task<ActivationResponseDto> ActivateLicense(
             string licenseKey,
             string machineId,
@@ -41,7 +22,6 @@ namespace LicenseManager.API.Repositories
             string ipAddress)
         {
             using var conn = _factory.CreateConnection();
-
             await conn.OpenAsync();
 
             using var cmd = new NpgsqlCommand(
@@ -66,21 +46,62 @@ namespace LicenseManager.API.Repositories
             return response;
         }
 
-        public async Task SaveLicense(long subscriptionId, string licenseId, string licenseKey)
+        public async Task<LicenseGenerationContext> GetLicenseGenerationContext(long subscriptionId)
         {
             using var conn = _factory.CreateConnection();
-
             await conn.OpenAsync();
 
             using var cmd = new NpgsqlCommand(
-                "SELECT sp_insert_license(@p_subscription_id,@p_license_id,@p_license_key)",
+                @"SELECT s.id,
+                         s.status,
+                         l.license_key
+                  FROM subscriptions s
+                  LEFT JOIN LATERAL (
+                      SELECT license_key
+                      FROM licenses
+                      WHERE subscription_id = s.id
+                      ORDER BY issue_date DESC
+                      LIMIT 1
+                  ) l ON true
+                  WHERE s.id = @sid",
+                conn);
+
+            cmd.Parameters.AddWithValue("@sid", subscriptionId);
+
+            using var reader = await cmd.ExecuteReaderAsync();
+
+            if (!await reader.ReadAsync())
+            {
+                throw new InvalidOperationException("Subscription not found.");
+            }
+
+            return new LicenseGenerationContext
+            {
+                SubscriptionId = reader.GetInt64(0),
+                SubscriptionStatus = reader.GetString(1),
+                ExistingLicenseKey = reader.IsDBNull(2) ? null : reader.GetString(2)
+            };
+        }
+
+        public async Task SaveLicense(
+            long subscriptionId,
+            string licenseKey,
+            string licenseDurationType,
+            string licenseMode)
+        {
+            using var conn = _factory.CreateConnection();
+            await conn.OpenAsync();
+
+            using var cmd = new NpgsqlCommand(
+                "SELECT sp_insert_license(@p_subscription_id,@p_license_key,@p_license_duration_type,@p_license_mode)",
                 conn);
 
             cmd.Parameters.AddWithValue("@p_subscription_id", subscriptionId);
-            cmd.Parameters.AddWithValue("@p_license_id", licenseId);
             cmd.Parameters.AddWithValue("@p_license_key", licenseKey);
+            cmd.Parameters.AddWithValue("@p_license_duration_type", licenseDurationType);
+            cmd.Parameters.AddWithValue("@p_license_mode", licenseMode);
 
-            //await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync();
         }
 
         public async Task<LicensePayload> GetLicensePayload(long subscriptionId)
@@ -100,17 +121,15 @@ namespace LicenseManager.API.Repositories
                 if (await reader.ReadAsync())
                 {
                     payload.CompanyId = Convert.ToInt64(reader["company_id"]);
-                    payload.CompanyName = reader["company_name"].ToString();
-                    payload.PlanName = reader["plan_name"].ToString();
-                    payload.LicenseDurationType = reader["license_duration_type"].ToString();
-                    payload.LicenseMode = reader["license_mode"].ToString();
+                    payload.CompanyName = reader["company_name"].ToString() ?? string.Empty;
+                    payload.PlanName = reader["plan_name"].ToString() ?? string.Empty;
+                    payload.LicenseDurationType = reader["license_duration_type"].ToString() ?? string.Empty;
+                    payload.LicenseMode = reader["license_mode"].ToString() ?? string.Empty;
                     payload.StartDate = Convert.ToDateTime(reader["start_date"]);
                     payload.ExpiryDate = Convert.ToDateTime(reader["expiry_date"]);
                     payload.SubscriptionId = subscriptionId;
                 }
             }
-
-            payload.LicenseAllocations = new List<LicenseAllocation>();
 
             using (var cmd = new NpgsqlCommand(
                 "SELECT * FROM sp_get_license_allocations(@sid)", conn))
@@ -128,8 +147,6 @@ namespace LicenseManager.API.Repositories
                     });
                 }
             }
-
-            payload.Features = new List<string>();
 
             using (var cmd = new NpgsqlCommand(
                 "SELECT * FROM sp_get_product_features(@sid)", conn))

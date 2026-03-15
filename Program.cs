@@ -7,23 +7,11 @@ using LicenseManager.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-// -----------------------------------------------------
-// Add Controllers
-// -----------------------------------------------------
-
 builder.Services.AddControllers();
-
-
-// -----------------------------------------------------
-// Swagger Configuration
-// -----------------------------------------------------
-
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
@@ -60,39 +48,35 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-
-// -----------------------------------------------------
-// Database Connection Factory
-// -----------------------------------------------------
-
 builder.Services.AddScoped<DbConnectionFactory>();
-
-
-// -----------------------------------------------------
-// Repository Layer
-// -----------------------------------------------------
-
 builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<RefreshTokenRepository>();
 builder.Services.AddScoped<LoginHistoryRepository>();
 builder.Services.AddScoped<ILicenseRepository, LicenseRepository>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
-
-// -----------------------------------------------------
-// Service Layer
-// -----------------------------------------------------
-
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<LicenseProtectionService>();
 
+var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
 
-// -----------------------------------------------------
-// JWT Authentication
-// -----------------------------------------------------
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    throw new Exception("Jwt:Key missing in configuration.");
+}
 
-var jwtKey = builder.Configuration["Jwt:Key"]
-             ?? throw new Exception("JWT Key not configured");
+if (string.IsNullOrWhiteSpace(jwtIssuer))
+{
+    throw new Exception("Jwt:Issuer missing in configuration.");
+}
+
+if (string.IsNullOrWhiteSpace(jwtAudience))
+{
+    throw new Exception("Jwt:Audience missing in configuration.");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -101,38 +85,51 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtKey))
     };
-});
 
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"JWT authentication failed: {context.Exception.Message}");
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            if (!context.Response.HasStarted)
+            {
+                context.Response.Headers["X-Auth-Error"] = context.ErrorDescription ?? "JWT challenge triggered.";
+            }
+
+            return Task.CompletedTask;
+        }
+    };
+});
 
 var app = builder.Build();
 
+Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
+Console.WriteLine($"JWT Issuer: {jwtIssuer}");
+Console.WriteLine($"JWT Audience: {jwtAudience}");
 
-// -----------------------------------------------------
-// Middleware Pipeline
-// -----------------------------------------------------
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
-
-app.UseAuthentication();   // MUST be before Authorization
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
