@@ -3,6 +3,7 @@ using LicenseManager.API.DTOs.Licenses;
 using LicenseManager.API.Models;
 using LicenseManager.API.Repositories.Interfaces;
 using Npgsql;
+using System.Data;
 
 namespace LicenseManager.API.Repositories
 {
@@ -52,21 +53,10 @@ namespace LicenseManager.API.Repositories
             await conn.OpenAsync();
 
             using var cmd = new NpgsqlCommand(
-                @"SELECT s.id,
-                         s.status,
-                         l.license_key
-                  FROM subscriptions s
-                  LEFT JOIN LATERAL (
-                      SELECT license_key
-                      FROM licenses
-                      WHERE subscription_id = s.id
-                      ORDER BY issue_date DESC
-                      LIMIT 1
-                  ) l ON true
-                  WHERE s.id = @sid",
+                "SELECT * FROM sp_get_license_generation_context(@p_subscription_id)",
                 conn);
 
-            cmd.Parameters.AddWithValue("@sid", subscriptionId);
+            cmd.Parameters.AddWithValue("@p_subscription_id", subscriptionId);
 
             using var reader = await cmd.ExecuteReaderAsync();
 
@@ -77,9 +67,12 @@ namespace LicenseManager.API.Repositories
 
             return new LicenseGenerationContext
             {
-                SubscriptionId = reader.GetInt64(0),
-                SubscriptionStatus = reader.GetString(1),
-                ExistingLicenseKey = reader.IsDBNull(2) ? null : reader.GetString(2)
+                SubscriptionId = Convert.ToInt64(reader["subscription_id"]),
+                SubscriptionStatus = reader["subscription_status"].ToString() ?? string.Empty,
+                ExistingLicenseKey = reader["existing_license_key"] == DBNull.Value
+                    ? null
+                    : reader["existing_license_key"].ToString(),
+                LicenseCode = TryGetString(reader, "license_code")
             };
         }
 
@@ -87,19 +80,44 @@ namespace LicenseManager.API.Repositories
             long subscriptionId,
             string licenseKey,
             string licenseDurationType,
-            string licenseMode)
+            string licenseMode,
+            string licenseCode)
         {
             using var conn = _factory.CreateConnection();
             await conn.OpenAsync();
 
             using var cmd = new NpgsqlCommand(
-                "SELECT sp_insert_license(@p_subscription_id,@p_license_key,@p_license_duration_type,@p_license_mode)",
+                "SELECT sp_insert_license(@p_subscription_id,@p_license_key,@p_license_duration_type,@p_license_mode,@p_license_code)",
                 conn);
 
             cmd.Parameters.AddWithValue("@p_subscription_id", subscriptionId);
             cmd.Parameters.AddWithValue("@p_license_key", licenseKey);
             cmd.Parameters.AddWithValue("@p_license_duration_type", licenseDurationType);
             cmd.Parameters.AddWithValue("@p_license_mode", licenseMode);
+            cmd.Parameters.AddWithValue("@p_license_code", licenseCode);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task UpdateSubscriptionStatus(
+            long subscriptionId,
+            string status,
+            long updatedBy,
+            DateTime updatedAt)
+        {
+            using var conn = _factory.CreateConnection();
+            await conn.OpenAsync();
+
+            var dbUpdatedAt = DateTime.SpecifyKind(updatedAt, DateTimeKind.Unspecified);
+
+            using var cmd = new NpgsqlCommand(
+     "CALL public.sp_update_subscription_status(@p_subscription_id,@p_status,@p_updated_by,@p_updated_at)",
+     conn);
+
+            cmd.Parameters.AddWithValue("p_subscription_id", NpgsqlTypes.NpgsqlDbType.Bigint, subscriptionId);
+            cmd.Parameters.AddWithValue("p_status", NpgsqlTypes.NpgsqlDbType.Varchar, status);
+            cmd.Parameters.AddWithValue("p_updated_by", NpgsqlTypes.NpgsqlDbType.Bigint, updatedBy);
+            cmd.Parameters.AddWithValue("p_updated_at", NpgsqlTypes.NpgsqlDbType.Timestamp, dbUpdatedAt);
 
             await cmd.ExecuteNonQueryAsync();
         }
@@ -128,6 +146,7 @@ namespace LicenseManager.API.Repositories
                     payload.StartDate = Convert.ToDateTime(reader["start_date"]);
                     payload.ExpiryDate = Convert.ToDateTime(reader["expiry_date"]);
                     payload.SubscriptionId = subscriptionId;
+                    
                 }
             }
 
@@ -167,6 +186,21 @@ namespace LicenseManager.API.Repositories
             }
 
             return payload;
+        }
+
+        private static string TryGetString(NpgsqlDataReader reader, string columnName)
+        {
+            for (var i = 0; i < reader.FieldCount; i++)
+            {
+                if (!string.Equals(reader.GetName(i), columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return reader.IsDBNull(i) ? string.Empty : reader.GetValue(i)?.ToString() ?? string.Empty;
+            }
+
+            return string.Empty;
         }
     }
 }

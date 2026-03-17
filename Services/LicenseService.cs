@@ -1,5 +1,6 @@
 using LicenseManager.API.DTOs.Licenses;
 using LicenseManager.API.Helpers;
+using LicenseManager.API.Models;
 using LicenseManager.API.Repositories.Interfaces;
 using LicenseManager.API.Services.Interfaces;
 
@@ -18,7 +19,7 @@ namespace LicenseManager.API.Services
             _licenseProtectionService = licenseProtectionService;
         }
 
-        public async Task<string> GenerateLicense(long subscriptionId, long userId)
+        public async Task ApproveSubscription(long subscriptionId, long userId)
         {
             if (userId <= 0)
             {
@@ -29,8 +30,30 @@ namespace LicenseManager.API.Services
 
             if (!string.Equals(context.SubscriptionStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
             {
+                throw new InvalidOperationException("Only pending subscriptions can be approved.");
+            }
+
+            await _repository.UpdateSubscriptionStatus(
+                subscriptionId,
+                "APPROVED",
+                userId,
+                DateTime.UtcNow);
+        }
+
+        public async Task<string> GenerateLicense(long subscriptionId, long userId)
+        {
+            if (userId <= 0)
+            {
+                throw new InvalidOperationException("Logged in user id is required.");
+            }
+
+            var context = await _repository.GetLicenseGenerationContext(subscriptionId);
+
+            if (!string.Equals(context.SubscriptionStatus, "APPROVED", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(context.SubscriptionStatus, "LICENSE_ISSUED", StringComparison.OrdinalIgnoreCase))
+            {
                 throw new InvalidOperationException(
-                    "License can only be generated or downloaded while the subscription is in PENDING status.");
+                    "License can only be generated after subscription approval.");
             }
 
             if (!string.IsNullOrWhiteSpace(context.ExistingLicenseKey))
@@ -39,18 +62,66 @@ namespace LicenseManager.API.Services
             }
 
             var payload = await _repository.GetLicensePayload(subscriptionId);
-            payload.LicenseId = Guid.NewGuid().ToString();
-
+            string code = Guid.NewGuid()
+                  .ToString("N")   // removes dashes
+                  .Substring(0, 12)
+                  .ToUpper();
+            payload.LicenseId = code;
+            payload.LicenseCode = code;
             var encryptedLicense = _licenseProtectionService.CreateEncryptedLicenseDocument(payload);
 
             await _repository.SaveLicense(
                 subscriptionId,
                 encryptedLicense,
                 payload.LicenseDurationType,
-                payload.LicenseMode
+                payload.LicenseMode,
+                payload.LicenseCode
             );
 
+            await _repository.UpdateSubscriptionStatus(
+                subscriptionId,
+                "LICENSE_ISSUED",
+                userId,
+                DateTime.UtcNow);
+
             return encryptedLicense;
+        }
+
+        public async Task<LicenseDownloadResponse> DownloadLicense(long subscriptionId, long userId)
+        {
+            if (userId <= 0)
+            {
+                throw new InvalidOperationException("Logged in user id is required.");
+            }
+
+            var context = await _repository.GetLicenseGenerationContext(subscriptionId);
+
+            if (string.IsNullOrWhiteSpace(context.ExistingLicenseKey))
+            {
+                throw new InvalidOperationException("License has not been generated yet for this subscription.");
+            }
+
+            var licenseCode = context.LicenseCode;
+
+            if (string.IsNullOrWhiteSpace(licenseCode))
+            {
+                var validation = _licenseProtectionService.ValidateEncryptedLicense(context.ExistingLicenseKey);
+                if (validation.IsValid && !string.IsNullOrWhiteSpace(validation.Payload?.LicenseCode))
+                {
+                    licenseCode = validation.Payload.LicenseCode;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(licenseCode))
+            {
+                licenseCode = subscriptionId.ToString();
+            }
+
+            return new LicenseDownloadResponse
+            {
+                LicenseKey = context.ExistingLicenseKey,
+                LicenseCode = licenseCode
+            };
         }
 
         public async Task<ActivationResponseDto> ActivateLicense(ActivationRequestDto request, long userId)

@@ -168,9 +168,12 @@ namespace LicenseManager.API.Controllers
             try
             {
                 var userId = GetLoggedInUserId();
-                var license = await _licenseService.GenerateLicense(subscriptionId, userId);
-                var fileName = $"subscription-{subscriptionId}.lic";
-                var bytes = Encoding.UTF8.GetBytes(license);
+
+                var result = await _licenseService.DownloadLicense(subscriptionId, userId);
+
+                var fileName = $"METRONUX-{result.LicenseCode}.lic";
+
+                var bytes = Encoding.UTF8.GetBytes(result.LicenseKey);
 
                 return File(bytes, "application/octet-stream", fileName);
             }

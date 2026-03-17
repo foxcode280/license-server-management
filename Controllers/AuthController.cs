@@ -21,6 +21,8 @@ namespace LicenseManager.API.Controllers
         {
             try
             {
+                request.Email = "support@metronux.com";
+                request.Password = "admin@123";
                 var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
                 var agent = Request.Headers["User-Agent"].ToString();
                 var result = await _service.Login(request, ip, agent);

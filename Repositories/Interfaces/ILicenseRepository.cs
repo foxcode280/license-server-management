@@ -19,6 +19,13 @@ namespace LicenseManager.API.Repositories.Interfaces
             long subscriptionId,
             string licenseKey,
             string licenseDurationType,
-            string licenseMode);
+            string licenseMode,
+            string licenseCode);
+
+        Task UpdateSubscriptionStatus(
+            long subscriptionId,
+            string status,
+            long updatedBy,
+            DateTime updatedAt);
     }
 }

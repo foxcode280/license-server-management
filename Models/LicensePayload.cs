@@ -25,5 +25,6 @@ namespace LicenseManager.API.Models
         public List<LicenseAllocation> LicenseAllocations { get; set; } = new();
 
         public List<string> Features { get; set; } = new();
+        public string LicenseCode { get; set; }
     }
 }

@@ -12,17 +12,22 @@ Accept: application/json
   "password": "admin@123"
 }
 
-### 2. Generate encrypted license for a pending subscription
+### 2. Approve a pending subscription
+POST {{LicenseManager.API_HostAddress}}/api/subscriptions/1/approve
+Accept: application/json
+Authorization: Bearer {{accessToken}}
+
+### 3. Generate encrypted license for an approved subscription
 POST {{LicenseManager.API_HostAddress}}/api/license/generate?subscriptionId=1
 Accept: application/json
 Authorization: Bearer {{accessToken}}
 
-### 3. Download encrypted .lic file for a pending subscription
+### 4. Download the stored encrypted .lic file
 GET {{LicenseManager.API_HostAddress}}/api/license/download?subscriptionId=1
 Accept: application/octet-stream
 Authorization: Bearer {{accessToken}}
 
-### 4. Verify encrypted license text by paste
+### 5. Verify encrypted license text by paste
 POST {{LicenseManager.API_HostAddress}}/api/license/verify-license
 Content-Type: application/json
 Accept: application/json
@@ -32,19 +37,7 @@ Authorization: Bearer {{accessToken}}
   "licenseDocument": "PASTE_THE_ENCRYPTED_LIC_CONTENT_HERE"
 }
 
-### 5. Verify encrypted .lic file by upload
-POST {{LicenseManager.API_HostAddress}}/api/license/verify-file
-Authorization: Bearer {{accessToken}}
-Content-Type: multipart/form-data; boundary=boundary
-
---boundary
-Content-Disposition: form-data; name="licenseFile"; filename="subscription-1.lic"
-Content-Type: application/octet-stream
-
-PASTE_FILE_CONTENT_HERE
---boundary--
-
-### 6. Activate encrypted license by paste
+### 6. Activate a pasted encrypted license document with machine binding details
 POST {{LicenseManager.API_HostAddress}}/api/license/activate
 Content-Type: application/json
 Accept: application/json
@@ -57,7 +50,7 @@ Authorization: Bearer {{accessToken}}
   "ipAddress": "192.168.1.10"
 }
 
-### 7. Refresh token using current access token and refresh token
+### 7. Refresh token
 POST {{LicenseManager.API_HostAddress}}/api/auth/refresh
 Content-Type: application/json
 Accept: application/json
@@ -67,7 +60,7 @@ Authorization: Bearer {{accessToken}}
   "refreshToken": "{{refreshToken}}"
 }
 
-### 8. Logout using current access token and refresh token
+### 8. Logout
 POST {{LicenseManager.API_HostAddress}}/api/auth/logout
 Content-Type: application/json
 Accept: application/json
