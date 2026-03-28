@@ -1,4 +1,4 @@
-using LicenseManager.API.DTOs.SubscriptionPlans;
+﻿using LicenseManager.API.DTOs.SubscriptionPlans;
 using LicenseManager.API.Models;
 
 namespace LicenseManager.API.Services.Interfaces
@@ -7,6 +7,7 @@ namespace LicenseManager.API.Services.Interfaces
     {
         Task<IReadOnlyCollection<SubscriptionPlanRecord>> GetAll();
         Task<SubscriptionPlanRecord?> GetById(long id);
+        Task<SubscriptionPlanRecord?> Create(CreateSubscriptionPlanRequestDto request, long userId);
         Task<SubscriptionPlanRecord?> Update(long id, UpdateSubscriptionPlanRequestDto request, long userId);
         Task<bool> Deactivate(long id, long userId);
     }

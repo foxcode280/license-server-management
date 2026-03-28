@@ -1,4 +1,4 @@
-using LicenseManager.API.DTOs.SubscriptionPlans;
+﻿using LicenseManager.API.DTOs.SubscriptionPlans;
 using LicenseManager.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,7 +27,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -41,7 +41,25 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateSubscriptionPlanRequestDto request)
+        {
+            try
+            {
+                var plan = await _service.Create(request, GetLoggedInUserId());
+                return Ok(plan);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -59,7 +77,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -77,7 +95,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 

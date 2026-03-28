@@ -1,0 +1,6 @@
+I also corrected the header so the run order now matches the new scripts:
+
+final_api_db_sync.sql
+subscription_plan_ui_sync.sql
+subscription_creation_process_sync.sql
+master_demo_data.sql

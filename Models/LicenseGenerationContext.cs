@@ -8,5 +8,7 @@ namespace LicenseManager.API.Models
 
         public string? ExistingLicenseKey { get; set; }
         public string LicenseCode { get; set; }
+
+        public string LicenseStatus { get; set; } = string.Empty;
     }
 }

@@ -7,7 +7,9 @@ namespace LicenseManager.API.Repositories.Interfaces
     {
         Task<IReadOnlyCollection<CompanyRecord>> GetAll();
         Task<CompanyRecord?> GetById(long id);
+        Task<CompanyRecord?> Create(CreateCompanyRequestDto request, long createdBy);
         Task<CompanyRecord?> Update(long id, UpdateCompanyRequestDto request, long updatedBy);
-        Task<bool> Deactivate(long id, long updatedBy);
+        Task<CompanyDetailsResponse?> GetDetails(long id);
+        Task<bool> Ban(long id, long updatedBy, string? reason);
     }
 }

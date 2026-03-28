@@ -72,7 +72,8 @@ namespace LicenseManager.API.Repositories
                 ExistingLicenseKey = reader["existing_license_key"] == DBNull.Value
                     ? null
                     : reader["existing_license_key"].ToString(),
-                LicenseCode = TryGetString(reader, "license_code")
+                LicenseCode = TryGetString(reader, "license_code"),
+                LicenseStatus = TryGetString(reader, "license_status")
             };
         }
 

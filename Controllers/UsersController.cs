@@ -27,7 +27,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -41,7 +41,25 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateUserRequestDto request)
+        {
+            try
+            {
+                var user = await _service.Create(request, GetLoggedInUserId());
+                return user == null ? BadRequest("Unable to create user.") : Ok(user);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -59,7 +77,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -77,7 +95,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 

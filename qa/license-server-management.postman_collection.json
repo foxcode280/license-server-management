@@ -1,0 +1,327 @@
+﻿{
+  "info": {
+    "name": "License Server Management API QA",
+    "_postman_id": "2c1f7e68-8e7f-46a3-8e2f-qa-license-server",
+    "description": "QA collection generated from the current ASP.NET Core API implementation. Includes implemented endpoints plus placeholder negative requests for requested-but-missing endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api" },
+    { "key": "accessToken", "value": "" },
+    { "key": "companyId", "value": "1" },
+    { "key": "planId", "value": "1" },
+    { "key": "productId", "value": "1" },
+    { "key": "subscriptionId", "value": "1" },
+    { "key": "userId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@metronux.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "Get Companies",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/companies"
+          }
+        },
+        {
+          "name": "Add Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TechCorp Solutions\",\n  \"industry\": \"Technology\",\n  \"contactPerson\": \"John Admin\",\n  \"primaryMobile\": \"+1-555-1000\",\n  \"alternateMobile\": \"+1-555-1001\",\n  \"email\": \"admin@techcorp.com\",\n  \"status\": \"Active\",\n  \"statusDescription\": \"Initial onboarding\"\n}"
+            },
+            "url": "{{baseUrl}}/companies"
+          }
+        },
+        {
+          "name": "Edit Company",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TechCorp Solutions Pvt Ltd\",\n  \"industry\": \"Technology\",\n  \"contactPerson\": \"Jane Admin\",\n  \"primaryMobile\": \"+1-555-2000\",\n  \"alternateMobile\": \"+1-555-2001\",\n  \"email\": \"ops@techcorp.com\",\n  \"status\": \"Active\",\n  \"statusDescription\": \"Updated company profile\"\n}"
+            },
+            "url": "{{baseUrl}}/companies/{{companyId}}"
+          }
+        },
+        {
+          "name": "Ban Company",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Compliance hold for QA scenario\"\n}"
+            },
+            "url": "{{baseUrl}}/companies/{{companyId}}/ban"
+          }
+        },
+        {
+          "name": "Delete Company (Expected 404/Not Implemented)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/companies/{{companyId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscription Plans",
+      "item": [
+        {
+          "name": "Get Plans",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/subscription-plans"
+          }
+        },
+        {
+          "name": "Add Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planCode\": \"\",\n  \"planName\": \"Business Plus\",\n  \"productId\": {{productId}},\n  \"mode\": \"PERIODIC\",\n  \"status\": \"ACTIVE\",\n  \"price\": 4999,\n  \"durationDays\": 365,\n  \"billingLabel\": \"365 Days (1 Year)\",\n  \"deviceLimit\": 100,\n  \"deviceLimitLabel\": \"100 Devices\",\n  \"description\": \"Designed for large-scale enterprise deployments\",\n  \"highlights\": [\n    \"Priority onboarding\",\n    \"Flexible deployment\"\n  ],\n  \"features\": [\n    \"24/7 Support\",\n    \"Advanced Analytics\"\n  ],\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/subscription-plans"
+          }
+        },
+        {
+          "name": "Edit Plan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planCode\": \"PLAN-PROFESSIONAL\",\n  \"planName\": \"Professional\",\n  \"productId\": {{productId}},\n  \"mode\": \"PERIODIC\",\n  \"status\": \"ACTIVE\",\n  \"price\": 49999,\n  \"durationDays\": 365,\n  \"billingLabel\": \"365 Days (1 Year)\",\n  \"deviceLimit\": 120,\n  \"deviceLimitLabel\": \"120 Devices\",\n  \"description\": \"Updated device limit for QA\",\n  \"highlights\": [\n    \"Annual subscription\",\n    \"Supports up to 120 devices\"\n  ],\n  \"features\": [\n    \"24/7 Support\",\n    \"Basic Analytics\"\n  ],\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/subscription-plans/{{planId}}"
+          }
+        },
+        {
+          "name": "Deactivate Plan",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/subscription-plans/{{planId}}/deactivate"
+          }
+        },
+        {
+          "name": "Delete Plan (Expected 404/Not Implemented)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/subscription-plans/{{planId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Create Subscription Request - Default Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": {{companyId}},\n  \"planCategory\": \"DEFAULT\",\n  \"planId\": {{planId}},\n  \"licenseMode\": \"ONLINE\",\n  \"allocations\": [\n    { \"osTypeId\": 1, \"allocatedCount\": 40 },\n    { \"osTypeId\": 2, \"allocatedCount\": 30 },\n    { \"osTypeId\": 3, \"allocatedCount\": 20 },\n    { \"osTypeId\": 4, \"allocatedCount\": 10 }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/subscriptions"
+          }
+        },
+        {
+          "name": "Create Subscription Request - Custom Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": {{companyId}},\n  \"planCategory\": \"CUSTOM\",\n  \"productId\": {{productId}},\n  \"startDate\": \"2026-03-22T00:00:00\",\n  \"durationDays\": 30,\n  \"licenseMode\": \"ONLINE\",\n  \"allocations\": [\n    { \"osTypeId\": 1, \"allocatedCount\": 5 },\n    { \"osTypeId\": 2, \"allocatedCount\": 10 },\n    { \"osTypeId\": 3, \"allocatedCount\": 0 },\n    { \"osTypeId\": 4, \"allocatedCount\": 0 }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/subscriptions"
+          }
+        },
+        {
+          "name": "Approve Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/subscriptions/{{subscriptionId}}/approve"
+          }
+        },
+        {
+          "name": "Reject Subscription (Expected 404/Not Implemented)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Rejected in QA scenario\"\n}"
+            },
+            "url": "{{baseUrl}}/subscriptions/{{subscriptionId}}/reject"
+          }
+        },
+        {
+          "name": "View Subscription Status (Expected 404/Not Implemented)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/subscriptions/{{subscriptionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "Add User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA User\",\n  \"email\": \"qa.user@example.com\",\n  \"role\": \"VIEWER\",\n  \"designation\": \"QA Engineer\",\n  \"mobile\": \"+1-555-3000\",\n  \"alternateMobile\": \"+1-555-3001\",\n  \"isDisabled\": false\n}"
+            },
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA User Updated\",\n  \"email\": \"qa.user@example.com\",\n  \"role\": \"ADMIN\",\n  \"designation\": \"QA Lead\",\n  \"mobile\": \"+1-555-3000\",\n  \"alternateMobile\": \"+1-555-3001\",\n  \"isDisabled\": false\n}"
+            },
+            "url": "{{baseUrl}}/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Deactivate User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}/deactivate"
+          }
+        },
+        {
+          "name": "Delete User (Expected 404/Not Implemented)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth Negative",
+      "item": [
+        {
+          "name": "Unauthorized Access - Companies",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/companies"
+          }
+        }
+      ]
+    }
+  ]
+}

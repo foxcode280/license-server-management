@@ -40,7 +40,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -71,7 +71,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -96,11 +96,14 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new VerifyLicenseResponseDto
-                {
-                    IsValid = false,
-                    Reason = ex.Message
-                });
+                return ApiExceptionResponseFactory.Create(
+                    this,
+                    ex,
+                    message => new VerifyLicenseResponseDto
+                    {
+                        IsValid = false,
+                        Reason = message
+                    });
             }
         }
 
@@ -129,11 +132,14 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new VerifyLicenseResponseDto
-                {
-                    IsValid = false,
-                    Reason = ex.Message
-                });
+                return ApiExceptionResponseFactory.Create(
+                    this,
+                    ex,
+                    message => new VerifyLicenseResponseDto
+                    {
+                        IsValid = false,
+                        Reason = message
+                    });
             }
         }
 
@@ -158,7 +164,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -171,7 +177,7 @@ namespace LicenseManager.API.Controllers
 
                 var result = await _licenseService.DownloadLicense(subscriptionId, userId);
 
-                var fileName = $"METRONUX-{result.LicenseCode}.lic";
+                var fileName = $"MXGENOFF-{result.LicenseCode}.lic";
 
                 var bytes = Encoding.UTF8.GetBytes(result.LicenseKey);
 
@@ -183,7 +189,167 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpPost("offline-request/generate")]
+        public async Task<IActionResult> GenerateOfflineActivationRequest([FromBody] GenerateOfflineActivationRequestDto request)
+        {
+            try
+            {
+                var userId = GetLoggedInUserId();
+                var result = await _licenseService.GenerateOfflineActivationRequest(request, userId);
+
+                return Ok(new
+                {
+                    result.RequestId,
+                    result.FileName,
+                    requestDocument = result.EncryptedRequest,
+                    payload = result.Payload,
+                    message = "Offline activation request generated successfully."
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpPost("offline/generic/inspect")]
+        public async Task<IActionResult> InspectOfflineGenericLicense([FromBody] InspectOfflineLicenseRequestDto request)
+        {
+            try
+            {
+                var userId = GetLoggedInUserId();
+                var result = await _licenseService.InspectOfflineGenericLicense(
+                    request.LicenseDocument,
+                    request.PublicKey,
+                    userId);
+
+                return Ok(MapVerifyResult(result));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new VerifyLicenseResponseDto
+                {
+                    IsValid = false,
+                    Reason = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                return ApiExceptionResponseFactory.Create(
+                    this,
+                    ex,
+                    message => new VerifyLicenseResponseDto
+                    {
+                        IsValid = false,
+                        Reason = message
+                    });
+            }
+        }
+
+        [HttpPost("offline/request/generate-from-license")]
+        public async Task<IActionResult> GenerateOfflineRequestFromLicense([FromBody] GenerateOfflineRequestFromLicenseDto request)
+        {
+            try
+            {
+                var userId = GetLoggedInUserId();
+                var result = await _licenseService.GenerateOfflineActivationRequestFromLicense(request, userId);
+
+                return Ok(new
+                {
+                    result.RequestId,
+                    result.FileName,
+                    requestDocument = result.EncryptedRequest,
+                    payload = result.Payload,
+                    message = "Offline activation request generated successfully from generic license."
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpPost("offline/final/inspect")]
+        public async Task<IActionResult> InspectFinalOfflineLicense([FromBody] InspectOfflineLicenseRequestDto request)
+        {
+            try
+            {
+                var userId = GetLoggedInUserId();
+                var result = await _licenseService.ValidateOfflineFinalLicense(
+                    request.LicenseDocument,
+                    request.PublicKey,
+                    userId);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ValidateOfflineFinalLicenseResponseDto
+                {
+                    IsValid = false,
+                    Reason = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                return ApiExceptionResponseFactory.Create(
+                    this,
+                    ex,
+                    message => new ValidateOfflineFinalLicenseResponseDto
+                    {
+                        IsValid = false,
+                        Reason = message
+                    });
+            }
+        }
+
+        [HttpGet("offline-request/system-details")]
+        public IActionResult GetOfflineRequestSystemDetails([FromServices] SystemMachineInfoService systemMachineInfoService)
+        {
+            try
+            {
+                return Ok(systemMachineInfoService.GetCurrentMachineInfo());
+            }
+            catch (Exception ex)
+            {
+                return ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpPost("offline-request/download")]
+        public async Task<IActionResult> DownloadOfflineActivationRequest([FromBody] GenerateOfflineActivationRequestDto request)
+        {
+            try
+            {
+                var userId = GetLoggedInUserId();
+                var result = await _licenseService.GenerateOfflineActivationRequest(request, userId);
+                var bytes = Encoding.UTF8.GetBytes(result.EncryptedRequest);
+                var licenseCode = string.IsNullOrWhiteSpace(result.Payload?.License?.LicenseCode)
+                    ? "UNKNOWN"
+                    : result.Payload.License.LicenseCode.Trim();
+                var fileName = $"MXGENOFF-{licenseCode}.lic";
+
+                return File(bytes, "application/octet-stream", fileName);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 

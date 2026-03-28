@@ -27,7 +27,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -41,7 +41,39 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpGet("{id:long}/details")]
+        public async Task<IActionResult> GetDetails(long id)
+        {
+            try
+            {
+                var details = await _service.GetDetails(id);
+                return details == null ? NotFound() : Ok(details);
+            }
+            catch (Exception ex)
+            {
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateCompanyRequestDto request)
+        {
+            try
+            {
+                var company = await _service.Create(request, GetLoggedInUserId());
+                return company == null ? BadRequest("Unable to create company.") : Ok(company);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -59,17 +91,17 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
-        [HttpPatch("{id:long}/deactivate")]
-        public async Task<IActionResult> Deactivate(long id)
+        [HttpPatch("{id:long}/ban")]
+        public async Task<IActionResult> Ban(long id, [FromBody] BanCompanyRequestDto request)
         {
             try
             {
-                var deactivated = await _service.Deactivate(id, GetLoggedInUserId());
-                return deactivated ? Ok(new { id, message = "Company deactivated successfully." }) : NotFound();
+                var banned = await _service.Ban(id, GetLoggedInUserId(), request.Reason);
+                return banned ? Ok(new { id, message = "Company banned successfully." }) : NotFound();
             }
             catch (InvalidOperationException ex)
             {
@@ -77,7 +109,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 

@@ -27,7 +27,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -41,7 +41,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -59,7 +59,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 
@@ -77,7 +77,7 @@ namespace LicenseManager.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+                return LicenseManager.API.Helpers.ApiExceptionResponseFactory.Create(this, ex);
             }
         }
 

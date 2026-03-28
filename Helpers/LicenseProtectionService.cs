@@ -35,6 +35,62 @@ namespace LicenseManager.API.Helpers
             return EncryptDocument(signedDocument, encryptionKeyId, encryptionKey);
         }
 
+        public string CreateEncryptedDocument(string plainDocument)
+        {
+            if (string.IsNullOrWhiteSpace(plainDocument))
+            {
+                throw new InvalidOperationException("Document content is required for encryption.");
+            }
+
+            var encryptionKeyId = _configuration["LicenseProtection:EncryptionKeyId"] ?? "enc-v1";
+            var encryptionKey = ResolveEncryptionKey(encryptionKeyId)
+                ?? throw new InvalidOperationException("License protection encryption key is not configured.");
+
+            return EncryptDocument(plainDocument, encryptionKeyId, encryptionKey);
+        }
+
+        public string CreateSignedEncryptedDocument<T>(T payload)
+        {
+            var signingKeyId = _configuration["LicenseSigning:KeyId"] ?? "v1";
+            var privateKey = _configuration["LicenseSigning:PrivateKey"]
+                ?? throw new InvalidOperationException("License signing private key is not configured.");
+
+            var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
+            var signature = SignPayload(payloadJson, privateKey);
+
+            var document = new SignedLicenseDocument
+            {
+                KeyId = signingKeyId,
+                Payload = payloadJson,
+                Signature = signature
+            };
+
+            var signedDocumentJson = JsonSerializer.Serialize(document, JsonOptions);
+            return CreateEncryptedDocument(signedDocumentJson);
+        }
+
+        public string SignDocument(string plainDocument)
+        {
+            if (string.IsNullOrWhiteSpace(plainDocument))
+            {
+                throw new InvalidOperationException("Document content is required for signing.");
+            }
+
+            var privateKey = _configuration["LicenseSigning:PrivateKey"]
+                ?? throw new InvalidOperationException("License signing private key is not configured.");
+
+            using var rsa = RSA.Create();
+            rsa.ImportRSAPrivateKey(Convert.FromBase64String(privateKey), out _);
+
+            var data = Encoding.UTF8.GetBytes(plainDocument);
+            var signature = rsa.SignData(
+                data,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            return Convert.ToBase64String(signature);
+        }
+
         public LicenseValidationResult ValidateEncryptedLicense(string encryptedLicense, string? publicKeyOverride = null)
         {
             if (!TryDecryptLicenseDocument(encryptedLicense, out var document, out var error) || document is null)
@@ -131,6 +187,124 @@ namespace LicenseManager.API.Helpers
             }
         }
 
+        public bool TryDecryptDocument(
+            string encryptedDocument,
+            out string? plainDocument,
+            out string? error)
+        {
+            plainDocument = null;
+            error = null;
+
+            try
+            {
+                var packageJson = Encoding.UTF8.GetString(Convert.FromBase64String(encryptedDocument.Trim()));
+                var package = JsonSerializer.Deserialize<EncryptedLicensePackage>(packageJson, JsonOptions);
+
+                if (package is null)
+                {
+                    error = "Document package could not be parsed.";
+                    return false;
+                }
+
+                var encryptionKey = ResolveEncryptionKey(package.EncryptionKeyId);
+                if (encryptionKey is null)
+                {
+                    error = $"Encryption key '{package.EncryptionKeyId}' is not configured.";
+                    return false;
+                }
+
+                var nonce = Convert.FromBase64String(package.Nonce);
+                var cipherText = Convert.FromBase64String(package.CipherText);
+                var tag = Convert.FromBase64String(package.Tag);
+                var plainBytes = new byte[cipherText.Length];
+
+                using var aes = new AesGcm(encryptionKey, tag.Length);
+                aes.Decrypt(nonce, cipherText, tag, plainBytes);
+
+                plainDocument = Encoding.UTF8.GetString(plainBytes);
+                return true;
+            }
+            catch (FormatException)
+            {
+                error = "Document is not a valid Base64-encoded package.";
+                return false;
+            }
+            catch (JsonException)
+            {
+                error = "Encrypted document package format is invalid.";
+                return false;
+            }
+            catch (CryptographicException)
+            {
+                error = "Document decryption failed.";
+                return false;
+            }
+        }
+
+        public SignedDocumentValidationResult<T> ValidateSignedEncryptedDocument<T>(
+            string encryptedDocument,
+            string? publicKeyOverride = null)
+        {
+            if (!TryDecryptDocument(encryptedDocument, out var plainDocument, out var error) ||
+                string.IsNullOrWhiteSpace(plainDocument))
+            {
+                return new SignedDocumentValidationResult<T>
+                {
+                    IsValid = false,
+                    Error = error
+                };
+            }
+
+            if (!LicenseGenerator.TryParseLicenseDocument(plainDocument, out var document) || document is null)
+            {
+                return new SignedDocumentValidationResult<T>
+                {
+                    IsValid = false,
+                    Error = "Signed document could not be parsed after decryption."
+                };
+            }
+
+            var publicKey = string.IsNullOrWhiteSpace(publicKeyOverride)
+                ? ResolvePublicKey(document.KeyId)
+                : publicKeyOverride;
+
+            if (!VerifySignature(document.Payload, document.Signature, publicKey))
+            {
+                return new SignedDocumentValidationResult<T>
+                {
+                    IsValid = false,
+                    Error = "Document signature is invalid.",
+                    KeyId = document.KeyId,
+                    Document = document
+                };
+            }
+
+            T? payload;
+            try
+            {
+                payload = JsonSerializer.Deserialize<T>(document.Payload, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                return new SignedDocumentValidationResult<T>
+                {
+                    IsValid = false,
+                    Error = "Signed document payload is invalid.",
+                    KeyId = document.KeyId,
+                    Document = document
+                };
+            }
+
+            return new SignedDocumentValidationResult<T>
+            {
+                IsValid = true,
+                KeyId = document.KeyId,
+                PayloadJson = document.Payload,
+                Document = document,
+                Payload = payload
+            };
+        }
+
         private string EncryptDocument(string signedDocument, string encryptionKeyId, byte[] encryptionKey)
         {
             var nonce = RandomNumberGenerator.GetBytes(12);
@@ -213,6 +387,20 @@ namespace LicenseManager.API.Helpers
             {
                 return false;
             }
+        }
+
+        private static string SignPayload(string payload, string privateKey)
+        {
+            using var rsa = RSA.Create();
+            rsa.ImportRSAPrivateKey(Convert.FromBase64String(privateKey), out _);
+
+            var data = Encoding.UTF8.GetBytes(payload);
+            var signature = rsa.SignData(
+                data,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            return Convert.ToBase64String(signature);
         }
 
         private static LicensePayload? DeserializePayload(string payloadJson)

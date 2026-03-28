@@ -15,11 +15,20 @@ namespace LicenseManager.API.Services
         }
 
         public Task<IReadOnlyCollection<UserManagementRecord>> GetAll() => _repository.GetAll();
+
         public Task<UserManagementRecord?> GetById(long id) => _repository.GetById(id);
+
+        public async Task<UserManagementRecord?> Create(CreateUserRequestDto request, long userId)
+        {
+            ValidateUserId(userId);
+            ValidateRequest(request.Name, request.Email, request.Designation, request.Mobile, request.Role);
+            return await _repository.Create(request, userId);
+        }
 
         public async Task<UserManagementRecord?> Update(long id, UpdateUserRequestDto request, long userId)
         {
             ValidateUserId(userId);
+            ValidateRequest(request.Name, request.Email, request.Designation, request.Mobile, request.Role);
             return await _repository.Update(id, request, userId);
         }
 
@@ -34,6 +43,34 @@ namespace LicenseManager.API.Services
             if (userId <= 0)
             {
                 throw new InvalidOperationException("Logged in user id is required.");
+            }
+        }
+
+        private static void ValidateRequest(string name, string email, string designation, string mobile, string role)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new InvalidOperationException("Name is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new InvalidOperationException("Email is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(designation))
+            {
+                throw new InvalidOperationException("Designation is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(mobile))
+            {
+                throw new InvalidOperationException("Primary mobile is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                throw new InvalidOperationException("Role is required.");
             }
         }
     }
